@@ -22,206 +22,232 @@ const FINGER_LABELS = {
   4: 'Mindinho',
 };
 
+// ============================================================================
+// Constantes de geometria SVG
+// ============================================================================
+const NUM_STRINGS = 6;
 const NUM_FRETS = 5;
+const SVG_WIDTH = 400;
+const SVG_HEIGHT = 500;
+const NUT_HEIGHT = 6;
+const MARGIN_LEFT = 40;
+const MARGIN_RIGHT = 40;
+const TOP_OFFSET = 70;
+const BOTTOM_OFFSET = 60;
 
-/**
- * Dedograma de violão seguindo o modelo de referência:
- * - Sem casa 0 (casas 1 a 5)
- * - Cordas soltas com bolinha cheia no topo
- * - Tarraxa com cor de destaque e borda
- * - Bolinhas azuis com número do dedo
- * - Baixo (bordão) em bolinha maior e mais escura
- * - Pestana (barre) como traço na primeira casa com indicação da casa real
- * - Abafadas com ✕
- *
- * @param chord objeto Chord gerado pelo módulo de acordes
- * @param showLegend exibe a legenda de dedos abaixo do diagrama
- * @param className classes Tailwind adicionais
- */
+const STRING_AREA_WIDTH = SVG_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
+const FRET_AREA_HEIGHT = SVG_HEIGHT - TOP_OFFSET - BOTTOM_OFFSET;
+const STRING_SPACING = STRING_AREA_WIDTH / (NUM_STRINGS - 1);
+const FRET_SPACING = FRET_AREA_HEIGHT / NUM_FRETS;
+
+const getStringX = (stringIndex) => MARGIN_LEFT + stringIndex * STRING_SPACING;
+const getFretY = (relativeFret) => TOP_OFFSET + FRET_SPACING * (relativeFret - 0.5);
+const getFretLineY = (relativeFret) => TOP_OFFSET + FRET_SPACING * (relativeFret - 1);
+
 export default function ChordDiagram({ chord, showLegend = true, className = '' }) {
   if (!chord) return null;
 
-  // Posições por corda: índice 0 = 6ª corda ... índice 5 = 1ª corda
   const positions = chord.shape?.positions ?? Array(6).fill(null);
   const preferSharp = !/b/.test(chord.root);
 
-  // Informações de pestana
   const hasBarre = chord.barre?.barre ?? false;
   const barreFretReal = chord.barre?.fret ?? 0;
 
-  // Número do dedo por corda (índice da corda -> dedo)
   const fingerByString = {};
   (chord.fingering || []).forEach((f) => {
     fingerByString[f.string] = f.finger;
   });
 
-  // Baixo (bordão): corda mais grave (menor índice) tocada em casa > 0.
-  // Cordas abertas (0) ficam com ○ de "corda solta".
   const bassStringIdx = positions.findIndex(
     (p) => typeof p === 'number' && p > 0
   );
-
   const isBass = (si) => bassStringIdx !== -1 && si === bassStringIdx;
 
-  // Nota soante de cada corda (para o rodapé)
   const noteForString = (si, pos) => {
     if (pos === null || pos === 'X') return null;
     const st = noteToSemitone(openStringNote(si)) + pos;
     return semitoneToNote(st, preferSharp);
   };
 
-  // Quando há pestana, notas na mesma casa da pestana são cobertas por ela
-  const isOnBarre = (si, pos) => hasBarre && typeof pos === 'number' && pos === barreFretReal;
+  const isOnBarre = (si, pos) =>
+    hasBarre && typeof pos === 'number' && pos === barreFretReal;
 
-  // Casas visíveis: 1, 2, 3, 4, 5 (sem casa 0)
-  const fretSpaces = [1, 2, 3, 4, 5];
+  let firstVisibleFret = 1;
+  if (hasBarre && barreFretReal > 1) {
+    firstVisibleFret = barreFretReal - 1;
+  }
+  firstVisibleFret = Math.max(1, firstVisibleFret);
 
-  // Posição horizontal de cada corda (6% .. 94%)
-  const stringX = (si) => 6 + si * (88 / 5);
-  // Topo central de cada casa k (índice 0 = primeira casa)
-  const fretSpaceTop = (k) => 14 + ((k + 0.5) / NUM_FRETS) * 86;
+  const lastVisibleFret = firstVisibleFret + NUM_FRETS - 1;
+
+  let barreFromString = 0;
+  let barreToString = NUM_STRINGS - 1;
+  if (hasBarre) {
+    const barreStringIndices = positions
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => typeof p === 'number' && p === barreFretReal);
+    if (barreStringIndices.length > 0) {
+      barreFromString = Math.min(...barreStringIndices.map(({ i }) => i));
+      barreToString = Math.max(...barreStringIndices.map(({ i }) => i));
+    }
+  }
+
+  const barreRelativeFret = barreFretReal - firstVisibleFret + 1;
+  const showBarreLabel = hasBarre && barreFretReal > 5;
 
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700 ${className}`}>
-      {/* Marcadores do topo: ✕ (não tocar) e bolinha cheia (corda solta), alinhados às cordas */}
-      <div className="relative h-[14%] flex items-end justify-center px-1 mb-1">
-        {positions.map((pos, si) => {
-          const x = stringX(si);
-          if (pos === null || pos === 'X') {
-            return (
-              <div
-                key={si}
-                className="absolute text-[11px] font-black text-gray-700 dark:text-gray-300"
-                style={{ left: `${x}%`, transform: 'translateX(-50%)' }}
-              >
-                ✕
-              </div>
-            );
-          }
-          if (pos === 0) {
-            return (
-              <div
-                key={si}
-                className="absolute w-6 h-6 rounded-full bg-purple-600 dark:bg-purple-500 flex items-center justify-center border-2 border-white dark:border-gray-900 shadow-md"
-                style={{
-                  left: `${x}%`,
-                  transform: 'translateX(-50%)',
-                  bottom: '-4px',
-                }}
-              />
-            );
-          }
-          return null;
-        })}
-      </div>
+      {showBarreLabel && (
+        <div className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300 text-center">
+          Pestana {barreFretReal}ª casa
+        </div>
+      )}
 
-      {/* Braço do violão */}
-      <div className="relative" style={{ aspectRatio: '4 / 5' }}>
-        {/* Tarraxa com cor de destaque e borda */}
-        <div
-          className="absolute left-0 right-0 top-0 h-[14%] bg-purple-700 dark:bg-purple-900 border-b-2 border-red-600 dark:border-red-500 rounded-t-lg z-30"
-        />
+      <svg
+        width="100%"
+        height="auto"
+        viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+        className="block w-full max-w-md mx-auto"
+        role="img"
+        aria-labelledby="chord-title"
+      >
+        <title id="chord-title">Diagrama de acorde de violão</title>
 
-        {/* Linhas das casas */}
-        {fretSpaces.map((_, k) => (
-          <div
-            key={k}
-            className="absolute left-0 right-0 h-[1px] bg-gray-400 dark:bg-gray-600 z-10"
-            style={{ top: `${14 + (k / NUM_FRETS) * 86}%` }}
-          />
-        ))}
-
-        {/* Números das casas à esquerda (1 a 5, sem casa 0) */}
-        {fretSpaces.map((absFret, k) => (
-          <div
-            key={k}
-            className="absolute left-[-8px] top-0 -translate-y-1/2 text-[11px] font-bold text-gray-600 dark:text-gray-300 w-6 text-right z-10"
-            style={{ top: `${fretSpaceTop(k)}%` }}
-          >
-            {absFret}
-          </div>
-        ))}
+        <defs>
+          <style>{`
+            .string { stroke: #94a3b8; stroke-width: 1; }
+            .fret-line { stroke: #cbd5e1; stroke-width: 1; }
+            .fret-line-nut { stroke: #475569; stroke-width: 2; }
+            .nut { fill: #dc2626; stroke: #b91c1c; stroke-width: 1; }
+            .barre { fill: #1e3a8a; stroke: #1e40af; stroke-width: 1; }
+            .dot { fill: #2563eb; stroke: #ffffff; stroke-width: 2; }
+            .dot-bass { fill: #1e3a8a; stroke: #ffffff; stroke-width: 2; }
+            .dot-text { fill: #ffffff; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+            .fret-num { fill: #64748b; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700; text-anchor: end; pointer-events: none; }
+            .open-dot { fill: #7c3aed; stroke: #ffffff; stroke-width: 2; }
+            .muted-text { fill: #94a3b8; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+            .string-label { fill: #64748b; font-family: system-ui, sans-serif; font-size: 11px; text-anchor: middle; pointer-events: none; }
+            .note-text { fill: #475569; font-family: system-ui, sans-serif; font-size: 11px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+            .note-open { fill: #7c3aed; }
+          `}</style>
+        </defs>
 
         {/* Cordas verticais */}
-        {[0, 1, 2, 3, 4, 5].map((si) => (
-          <div
+        {[...Array(NUM_STRINGS)].map((_, si) => (
+          <line
             key={si}
-            className="absolute top-[14%] bottom-[4%] w-[1.5px] bg-gray-600 dark:bg-gray-400 z-0"
-            style={{ left: `${stringX(si)}%` }}
+            className="string"
+            x1={getStringX(si)}
+            y1={TOP_OFFSET}
+            x2={getStringX(si)}
+            y2={TOP_OFFSET + FRET_AREA_HEIGHT}
           />
         ))}
 
-        {/* Pestana (barre): traço na primeira casa cobrindo todas as cordas */}
-        {hasBarre && (
-          <div
-            className="absolute z-40 flex items-center justify-center text-white font-bold text-xs shadow-lg"
-            style={{
-              left: `${6 + (88 / 5) / 2}%`,
-              top: `${fretSpaceTop(0)}%`,
-              width: '82%',
-              height: '26px',
-              minWidth: '82px',
-              minHeight: '26px',
-              borderRadius: '6px',
-              backgroundColor: '#1e3a8a',
-              transform: 'translate(-50%, -50%)',
-            }}
-          >
-            {1}
-          </div>
+        {/* Linhas dos trastes */}
+        {[...Array(NUM_FRETS + 1)].map((_, k) => (
+          <line
+            key={k}
+            className={k === 0 ? 'fret-line-nut' : 'fret-line'}
+            x1={getStringX(0)}
+            y1={getFretLineY(k + 1)}
+            x2={getStringX(NUM_STRINGS - 1)}
+            y2={getFretLineY(k + 1)}
+          />
+        ))}
+
+        {/* Nut */}
+        <rect
+          className="nut"
+          x={getStringX(0) - 6}
+          y={TOP_OFFSET - NUT_HEIGHT}
+          width={STRING_AREA_WIDTH + 12}
+          height={NUT_HEIGHT}
+          rx={2}
+        />
+
+        {/* Números das casas */}
+        {[...Array(NUM_FRETS)].map((_, k) => {
+          const realFret = firstVisibleFret + k;
+          return (
+            <text
+              key={k}
+              className="fret-num"
+              x={getStringX(0) - 8}
+              y={getFretY(k + 1) + 4}
+            >
+              {realFret}
+            </text>
+          );
+        })}
+
+        {/* Marcadores acima do nut */}
+        {positions.map((pos, si) => {
+          const x = getStringX(si);
+          const y = TOP_OFFSET - NUT_HEIGHT - 24;
+
+          if (pos === null || pos === 'X') {
+            return (
+              <text key={si} className="muted-text" x={x} y={y}>
+                ✕
+              </text>
+            );
+          }
+
+          if (pos === 0) {
+            return (
+              <circle key={si} className="open-dot" cx={x} cy={y} r={8} />
+            );
+          }
+
+          return null;
+        })}
+
+        {/* Pestana (Barre) */}
+        {hasBarre && barreRelativeFret >= 1 && barreRelativeFret <= NUM_FRETS && (
+          <rect
+            className="barre"
+            x={getStringX(barreFromString) - 14}
+            y={getFretY(barreRelativeFret) - NUT_HEIGHT / 2 - 2}
+            width={getStringX(barreToString) - getStringX(barreFromString) + 28}
+            height={NUT_HEIGHT + 10}
+            rx={6}
+          />
         )}
 
-        {/* Bolinhas dos dedos nas casas */}
+        {/* Bolinhas dos dedos */}
         {positions.map((pos, si) => {
           if (pos === null || pos === 'X' || pos === 0) return null;
 
-          // Quando há pestana, a primeira casa é a pestana (k=0 para a casa real da pestana).
-          // Outras notas ficam em casas relativas: pos - barreFretReal + 1
-          const k = hasBarre ? pos - barreFretReal + 1 : pos;
-          if (k < 0 || k >= NUM_FRETS) return null;
+          const relativeFret = pos - firstVisibleFret + 1;
+          if (relativeFret < 1 || relativeFret > NUM_FRETS) return null;
 
-          // Notas cobertas pela pestana (na casa real da pestana) não recebem bolinha separada
           if (hasBarre && pos === barreFretReal) return null;
 
           const finger = fingerByString[si] || 0;
           const bass = isBass(si);
+          const x = getStringX(si);
+          const y = getFretY(relativeFret);
 
           return (
-            <div
-              key={si}
-              className="absolute z-40 flex items-center justify-center text-white font-bold text-xs shadow-lg"
-              style={{
-                left: `${stringX(si)}%`,
-                top: `${fretSpaceTop(k)}%`,
-                width: bass ? '26px' : '20px',
-                height: bass ? '26px' : '20px',
-                minWidth: bass ? '26px' : '20px',
-                minHeight: bass ? '26px' : '20px',
-                borderRadius: '50%',
-                backgroundColor: bass ? '#1e3a8a' : '#2563eb',
-                transform: 'translate(-50%, -50%)',
-              }}
-            >
-              {finger}
-            </div>
+            <g key={si}>
+              <circle
+                className={bass ? 'dot-bass' : 'dot'}
+                cx={x}
+                cy={y}
+                r={bass ? 10 : 8}
+              />
+              {finger > 0 && (
+                <text className="dot-text" x={x} y={y}>
+                  {finger}
+                </text>
+              )}
+            </g>
           );
         })}
-      </div>
+      </svg>
 
-      {/* Indicação da pestana com casa real */}
-      {hasBarre && (
-        <div className="flex items-center gap-2 mt-1 px-[2%]">
-          <div
-            className="w-10 h-10 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white font-bold text-xs shadow border border-gray-500"
-          >
-            {1}
-          </div>
-          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            {barreFretReal}ª casa
-          </span>
-        </div>
-      )}
-      {/* Rodapé: cordas e notas soantes (da esquerda para a direita) */}
+      {/* Rodapé: notas soantes */}
       <div className="flex justify-between mt-2 px-[2%] text-[10px]">
         {positions.map((pos, si) => (
           <div key={si} className="text-center w-[16%]">
@@ -268,7 +294,7 @@ export default function ChordDiagram({ chord, showLegend = true, className = '' 
           ))}
           <div className="flex items-center gap-1.5 col-span-2">
             <span
-              className="w-5 h-5 rounded-full border-2 border-blue-600 dark:border-blue-400 flex items-center justify-center text-[9px] text-blue-600 dark:text-blue-400"
+              className="w-5 h-5 rounded-full border-2 border-purple-600 dark:border-purple-400 flex items-center justify-center text-[9px] text-purple-600 dark:text-purple-400"
             >
               ○
             </span>
@@ -285,5 +311,3 @@ export default function ChordDiagram({ chord, showLegend = true, className = '' 
     </div>
   );
 }
-
-
