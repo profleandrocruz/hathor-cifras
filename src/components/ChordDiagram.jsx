@@ -203,15 +203,18 @@ export default function ChordDiagram({ chord, showLegend = true, className = '' 
           return null;
         })}
 
-        {/* Pestana (Barre) */}
-        {hasBarre && barreRelativeFret >= 1 && barreRelativeFret <= NUM_FRETS && (
+        {/* Pestana (Barre) — desenhada ANTES dos dedos para ficar por baixo */}
+        {hasBarre &&
+          barreRelativeFret >= 1 &&
+          barreRelativeFret <= NUM_FRETS &&
+          barreStringIndices.length > 0 && (
           <rect
             className="barre"
-            x={getStringX(barreFromString) - 14}
-            y={getFretY(barreRelativeFret) - NUT_HEIGHT / 2 - 2}
-            width={getStringX(barreToString) - getStringX(barreFromString) + 28}
-            height={NUT_HEIGHT + 10}
-            rx={6}
+            x={getStringX(barreFromString) - 10}
+            y={getFretY(barreRelativeFret) - 4}
+            width={getStringX(barreToString) - getStringX(barreFromString) + 20}
+            height={8}
+            rx={4}
           />
         )}
 
