@@ -203,11 +203,12 @@ export default function ChordDiagram({ chord, showLegend = true, className = '' 
           return null;
         })}
 
-        {/* Pestana (Barre) — desenhada ANTES dos dedos para ficar por baixo */}
+        {/* Pestana (Barre) — desenhada ANTES dos dedos para ficar por baixo.
+             Só desenha quando há pelo menos 2 cordas na mesma casa (barre real). */}
         {hasBarre &&
           barreRelativeFret >= 1 &&
           barreRelativeFret <= NUM_FRETS &&
-          barreStringIndices.length > 0 && (
+          barreStringIndices.length >= 2 && (
           <rect
             className="barre"
             x={getStringX(barreFromString) - 10}
