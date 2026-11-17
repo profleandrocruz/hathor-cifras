@@ -82,14 +82,14 @@ export default function ChordDiagram({ chord, showLegend = true, className = '' 
 
   let barreFromString = 0;
   let barreToString = NUM_STRINGS - 1;
-  if (hasBarre) {
-    const barreStringIndices = positions
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => typeof p === 'number' && p === barreFretReal);
-    if (barreStringIndices.length > 0) {
-      barreFromString = Math.min(...barreStringIndices.map(({ i }) => i));
-      barreToString = Math.max(...barreStringIndices.map(({ i }) => i));
-    }
+  const barreStringIndices = hasBarre
+    ? positions
+        .map((p, i) => ({ p, i }))
+        .filter(({ p }) => typeof p === 'number' && p === barreFretReal)
+    : [];
+  if (barreStringIndices.length > 0) {
+    barreFromString = Math.min(...barreStringIndices.map(({ i }) => i));
+    barreToString = Math.max(...barreStringIndices.map(({ i }) => i));
   }
 
   const barreRelativeFret = barreFretReal - firstVisibleFret + 1;
